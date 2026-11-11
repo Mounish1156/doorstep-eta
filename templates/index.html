@@ -1,0 +1,459 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Doorstep — when dinner lands</title>
+<meta name="description" content="Fill the ticket, watch the board. A delivery-time estimator for the kitchen pass.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,700;9..144,900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body data-mood="evening">
+
+<!-- ================================================================
+     SVG sprite: filters (paper grain, ink bleed) + pictogram symbols.
+     No image files anywhere; everything below is drawn in SVG.
+================================================================= -->
+<svg class="sprite" aria-hidden="true" focusable="false">
+  <defs>
+    <!-- paper grain: fractal noise, desaturated -->
+    <filter id="f-grain" x="0" y="0" width="100%" height="100%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" stitchTiles="stitch"/>
+      <feColorMatrix type="saturate" values="0"/>
+    </filter>
+    <!-- ink bleed: displace the stamp edge so it reads as pressed rubber -->
+    <filter id="f-ink" x="-25%" y="-35%" width="150%" height="170%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.07 0.11" numOctaves="2" seed="7" result="n"/>
+      <feDisplacementMap in="SourceGraphic" in2="n" scale="2.2" xChannelSelector="R" yChannelSelector="G"/>
+    </filter>
+  </defs>
+
+  <!-- vehicles -->
+  <symbol id="i-bike" viewBox="0 0 24 24">
+    <circle cx="5.5" cy="16.5" r="4.2"/><circle cx="18.5" cy="16.5" r="4.2"/>
+    <path d="M5.5 16.5 10.2 8.6h4.6M10.2 16.5h5.1l3.2-7.9M8.4 8.6h3.6"/>
+  </symbol>
+  <symbol id="i-scooter" viewBox="0 0 24 24">
+    <circle cx="6.2" cy="17.6" r="3.1"/><circle cx="18" cy="17.6" r="3.1"/>
+    <path d="M6.2 17.6h7.6l2.4-8.4h3.1M13.8 17.6l2.2-6.2M15.4 6.6h3.4"/>
+  </symbol>
+  <symbol id="i-car" viewBox="0 0 24 24">
+    <path d="M4.2 16.4v-3.6l2.6-4.6h8.9l3.5 4.6v3.6"/>
+    <path d="M4.2 12.8h16.6M7.4 8.2l-1.1 4.6M14.4 8.2l1.6 4.6"/>
+    <circle cx="8" cy="17.4" r="1.9"/><circle cx="16.4" cy="17.4" r="1.9"/>
+  </symbol>
+
+  <!-- weather -->
+  <symbol id="i-clear" viewBox="0 0 24 24">
+    <circle cx="12" cy="12" r="4.4"/>
+    <path d="M12 3.2v2.4M12 18.4v2.4M3.2 12h2.4M18.4 12h2.4M5.8 5.8l1.7 1.7M16.5 16.5l1.7 1.7M18.2 5.8l-1.7 1.7M7.5 16.5l-1.7 1.7"/>
+  </symbol>
+  <symbol id="i-fog" viewBox="0 0 24 24">
+    <path d="M4 8.5h13M6.5 12h13M4 15.5h11M8 19h8"/>
+  </symbol>
+  <symbol id="i-rain" viewBox="0 0 24 24">
+    <path d="M7.4 14.6a3.7 3.7 0 0 1 .4-7.4 5 5 0 0 1 9.4 1.3 3.2 3.2 0 0 1-.6 6.1"/>
+    <path d="M8.6 17.2 7.6 20M12.4 17.2l-1 2.8M16.2 17.2l-1 2.8"/>
+  </symbol>
+  <symbol id="i-wind" viewBox="0 0 24 24">
+    <path d="M3.4 9h11.2a2.6 2.6 0 1 0-2.5-3.3M3.4 13.4h14.4a2.6 2.6 0 1 1-2.4 3.5M3.4 17.8h7"/>
+  </symbol>
+  <symbol id="i-snow" viewBox="0 0 24 24">
+    <path d="M12 3.6v16.8M4.9 7.7l14.2 8.6M19.1 7.7 4.9 16.3"/>
+    <path d="M9.6 5.4 12 7.6l2.4-2.2M9.6 18.6 12 16.4l2.4 2.2"/>
+  </symbol>
+
+  <!-- time of day -->
+  <symbol id="i-morning" viewBox="0 0 24 24">
+    <path d="M3.4 18.6h17.2M7.6 18.6a4.4 4.4 0 0 1 8.8 0"/>
+    <path d="M12 4.4v2.6M5.6 8.2l1.8 1.8M18.4 8.2l-1.8 1.8M2.6 14h2.4M19 14h2.4"/>
+  </symbol>
+  <symbol id="i-noon" viewBox="0 0 24 24">
+    <circle cx="12" cy="11" r="4.2"/>
+    <path d="M12 2.8v2.2M12 17v2.2M2.8 11H5M19 11h2.2M5.5 4.5l1.6 1.6M16.9 14.9l1.6 1.6M18.5 4.5l-1.6 1.6M7.1 14.9l-1.6 1.6"/>
+  </symbol>
+  <symbol id="i-dusk" viewBox="0 0 24 24">
+    <path d="M3.4 18.6h17.2M7.6 18.6a4.4 4.4 0 0 1 8.8 0"/>
+    <path d="M12 4.6V2M5.6 8.2 7.4 10M18.4 8.2 16.6 10M2.6 14h2.4M19 14h2.4"/>
+  </symbol>
+  <symbol id="i-night" viewBox="0 0 24 24">
+    <path d="M19.6 14.8A8.2 8.2 0 0 1 9.2 4.4a8.4 8.4 0 1 0 10.4 10.4Z"/>
+  </symbol>
+
+  <!-- traffic signal: which lamp is lit -->
+  <symbol id="i-sig-low" viewBox="0 0 24 24">
+    <rect x="7.6" y="3" width="8.8" height="15.4" rx="1.6"/>
+    <circle cx="12" cy="14.6" r="1.9" fill="currentColor" stroke="none"/>
+    <path d="M12 18.4v2.8M8.8 21.2h6.4"/>
+  </symbol>
+  <symbol id="i-sig-med" viewBox="0 0 24 24">
+    <rect x="7.6" y="3" width="8.8" height="15.4" rx="1.6"/>
+    <circle cx="12" cy="10.7" r="1.9" fill="currentColor" stroke="none"/>
+    <path d="M12 18.4v2.8M8.8 21.2h6.4"/>
+  </symbol>
+  <symbol id="i-sig-high" viewBox="0 0 24 24">
+    <rect x="7.6" y="3" width="8.8" height="15.4" rx="1.6"/>
+    <circle cx="12" cy="6.8" r="1.9" fill="currentColor" stroke="none"/>
+    <path d="M12 18.4v2.8M8.8 21.2h6.4"/>
+  </symbol>
+
+  <!-- route pins -->
+  <symbol id="i-pin-kitchen" viewBox="0 0 24 30">
+    <path d="M12 29 3.4 19.6A11.6 11.6 0 1 1 20.6 19.6Z" fill="#F3EBDD" stroke="#14130F" stroke-width="1.3"/>
+    <path d="M6.6 14.6h10.8M7.8 14.6c.4-3 2-4.8 4.2-4.8s3.8 1.8 4.2 4.8M12 6.4V4.2"
+          fill="none" stroke="#14130F" stroke-width="1.5" stroke-linecap="round"/>
+  </symbol>
+  <symbol id="i-pin-home" viewBox="0 0 24 30">
+    <path d="M12 29 3.4 19.6A11.6 11.6 0 1 1 20.6 19.6Z" fill="#F3EBDD" stroke="#14130F" stroke-width="1.3"/>
+    <path d="m7.4 14.4 4.6-4.2 4.6 4.2M8.9 13.6v4.6h6.2v-4.6"
+          fill="none" stroke="#14130F" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+  </symbol>
+
+  <!-- ui glyphs -->
+  <symbol id="i-copy" viewBox="0 0 24 24">
+    <rect x="8.6" y="8.6" width="11.4" height="11.4" rx="1.4"/>
+    <path d="M15.4 5.4H5.6A1.4 1.4 0 0 0 4.2 6.8v9.8"/>
+  </symbol>
+  <symbol id="i-vol-on" viewBox="0 0 24 24">
+    <path d="M4.4 9.4h3.4l4.6-3.8v12.8l-4.6-3.8H4.4Z"/>
+    <path d="M15.6 9.2a4 4 0 0 1 0 5.6M18.2 6.8a7.4 7.4 0 0 1 0 10.4"/>
+  </symbol>
+  <symbol id="i-vol-off" viewBox="0 0 24 24">
+    <path d="M4.4 9.4h3.4l4.6-3.8v12.8l-4.6-3.8H4.4Z"/>
+    <path d="m15.6 9.6 5 5M20.6 9.6l-5 5"/>
+  </symbol>
+  <symbol id="i-hood" viewBox="0 0 24 24">
+    <path d="M4.4 17.4a8.4 8.4 0 1 1 15.2 0"/>
+    <path d="m12 17.4 4.6-6.2"/>
+    <circle cx="12" cy="17.4" r="1.3"/>
+  </symbol>
+  <symbol id="i-x" viewBox="0 0 24 24">
+    <path d="m6 6 12 12M18 6 6 18"/>
+  </symbol>
+</svg>
+
+<!-- oversized wordmark, cropped by the left viewport edge -->
+<div class="word-band">
+  <h1 class="wordmark">Doorstep</h1>
+  <p class="word-sub">From the pass to your door.</p>
+</div>
+
+<!-- ================================================================
+     MOBILE ONLY: sticky compact board strip (ETA flaps + lands-at)
+================================================================= -->
+<div class="strip" data-live>
+  <div class="strip-sky" aria-hidden="true"></div>
+  <div class="strip-row">
+    <div class="strip-eta">
+      <span class="strip-cap">ETA</span>
+      <span class="flaps" data-flaps="eta" aria-hidden="true"></span>
+      <span class="strip-unit">MIN</span>
+    </div>
+    <div class="strip-lands">
+      <span class="strip-cap">LANDS AT</span>
+      <span class="flaps" data-flaps="lands" aria-hidden="true"></span>
+    </div>
+    <div class="strip-btns">
+      <button type="button" class="bbtn icon bcopy" aria-label="Copy ETA"><svg class="ico" aria-hidden="true"><use href="#i-copy"></use></svg></button>
+      <button type="button" class="bbtn icon bsound" aria-pressed="false" aria-label="Turn tick sound on"><svg class="ico" aria-hidden="true"><use href="#i-vol-off"></use></svg></button>
+    </div>
+  </div>
+  <span class="sr-only" data-sr>Nothing on the board yet.</span>
+</div>
+
+<main class="pass">
+
+  <!-- ================================================================
+       THE BOARD — a mechanical departure board
+  ================================================================= -->
+  <section class="board" aria-label="Departure board">
+    <div class="bezel" aria-hidden="true">
+      <i class="screw s1"></i><i class="screw s2"></i><i class="screw s3"></i><i class="screw s4"></i>
+    </div>
+    <div class="sky" aria-hidden="true"><span class="sky-disc"></span><span class="sky-horizon"></span></div>
+
+    <div class="board-main" data-live>
+      <p class="board-cap"><span class="cap-dot"></span>Estimated delivery</p>
+      <div class="flaps eta-flaps" data-flaps="eta" aria-hidden="true"></div>
+      <p class="lands">Lands at <span class="flaps lands-flaps" data-flaps="lands" aria-hidden="true"></span></p>
+
+      <div class="timeline" aria-hidden="true">
+        <div class="tl-track">
+          <div class="tl-ticks"></div>
+          <div class="tl-bracket" id="tl-br"></div>
+          <div class="tl-needle" id="tl-nd"></div>
+        </div>
+        <div class="tl-caps"><span>0</span><span id="tl-max">60 min</span></div>
+      </div>
+      <p class="tl-note">Likely window <b id="tl-win">—</b></p>
+      <span class="sr-only" data-sr>Nothing on the board yet.</span>
+    </div>
+
+    <!-- error state: DELAYED letter flaps + the server's own words -->
+    <div class="delayed" id="delayed" role="alert" hidden>
+      <div class="lflaps" id="delayed-flaps" aria-hidden="true"></div>
+      <p class="delayed-msg" id="delayed-msg"></p>
+    </div>
+
+    <div class="board-actions">
+      <button type="button" class="bbtn bcopy" disabled>
+        <svg class="ico" aria-hidden="true"><use href="#i-copy"></use></svg><span>Copy ETA</span>
+      </button>
+      <button type="button" class="bbtn bsound" aria-pressed="false">
+        <svg class="ico" aria-hidden="true"><use href="#i-vol-off"></use></svg><span>Tick</span>
+      </button>
+    </div>
+
+    <!-- the run: restaurant pin -> house pin, three stages by minute split -->
+    <div class="route-block">
+      <p class="bh">The run</p>
+      <svg class="route" id="route-svg" viewBox="0 0 480 186" role="img"
+           aria-label="Route from the kitchen to your door, split into kitchen, handoff and ride.">
+        <defs>
+          <!-- black dashes in the mask punch gaps -> the coloured path reads as dashed -->
+          <mask id="m-dash" maskUnits="userSpaceOnUse" x="0" y="0" width="480" height="186">
+            <rect x="0" y="0" width="480" height="186" fill="#fff"/>
+            <path id="m-dash-path" d="" fill="none" stroke="#000" stroke-width="7" stroke-dasharray="6 9"/>
+          </mask>
+        </defs>
+        <g mask="url(#m-dash)">
+          <path class="rseg s-prep"    data-seg="prep"    d="" fill="none"/>
+          <path class="rseg s-handoff" data-seg="handoff" d="" fill="none"/>
+          <path class="rseg s-ride"    data-seg="ride"    d="" fill="none"/>
+        </g>
+        <g class="rtags" id="rtags" aria-hidden="true"></g>
+        <g id="pin-a" class="rpin"><use href="#i-pin-kitchen" width="24" height="30" x="-12" y="-27"/></g>
+        <g id="pin-b" class="rpin"><use href="#i-pin-home" width="24" height="30" x="-12" y="-27"/></g>
+        <g id="courier" class="rcourier"><circle r="12"/><use id="courier-ico" href="#i-scooter" width="15" height="15" x="-7.5" y="-7.5"/></g>
+      </svg>
+      <p class="route-note" id="route-note">Kitchen <i></i> Handoff <i></i> Ride</p>
+    </div>
+
+    <!-- silent second wave of predictions: what would move the number -->
+    <div class="alt-block">
+      <p class="bh">What would change it</p>
+      <ul class="alt-list" id="alt-list">
+        <li class="alt-empty">Fire an order and the board will show what moves the number.</li>
+      </ul>
+    </div>
+
+    <footer class="board-foot">
+      <p class="foot-line">
+        In service <b>{{ metrics.best }}</b> · {{ "{:,}".format(metrics.rows) }} rows ·
+        typically within <b>{{ metrics.mae }} min</b> · R² <b>{{ metrics.r2 }}</b>
+      </p>
+      <button type="button" class="hood-open" id="hood-open">
+        <svg class="ico" aria-hidden="true"><use href="#i-hood"></use></svg>Under the hood
+      </button>
+    </footer>
+  </section>
+
+  <!-- ================================================================
+       THE ORDER TICKET — a thermal slip you fill in
+  ================================================================= -->
+  <section class="ticket-wrap">
+    <div class="ticket-frame">
+      <form class="ticket" id="ticket" autocomplete="off">
+        <svg class="grain" aria-hidden="true" preserveAspectRatio="none"><rect width="100%" height="100%" filter="url(#f-grain)"/></svg>
+
+        <header class="t-head">
+          <div class="t-top">
+            <span class="t-order">ORDER <b id="ord-no">#0000</b></span>
+            <span class="t-clock" id="ord-clock">—</span>
+          </div>
+          <div class="t-fields">
+            <div class="t-field"><span>Service</span><i></i><b>Delivery</b></div>
+            <div class="t-field"><span>Dest</span><i></i><b>Your door</b></div>
+            <div class="t-field"><span>Pass</span><i></i><b>Main kitchen</b></div>
+            <div class="t-field"><span>Status</span><i></i><b id="t-status">Waiting</b></div>
+          </div>
+        </header>
+
+        <div class="t-body">
+
+          <!-- 01–03: ruler scrubbers (real range inputs under the tape) -->
+          <div class="line">
+            <div class="line-head">
+              <span class="ln">01</span>
+              <label class="lname" for="distance">Distance</label>
+              <i class="leader"></i>
+              <output class="lval" id="o-distance" for="distance">6.0 km</output>
+            </div>
+            <div class="ruler" data-ruler data-major="5" data-unit="km">
+              <div class="ticks" aria-hidden="true"></div>
+              <div class="tick-labs" aria-hidden="true"></div>
+              <div class="needle" aria-hidden="true"></div>
+              <input type="range" id="distance" name="distance" min="0.5" max="20" step="0.5" value="6">
+            </div>
+          </div>
+
+          <div class="line">
+            <div class="line-head">
+              <span class="ln">02</span>
+              <label class="lname" for="prep">Kitchen prep</label>
+              <i class="leader"></i>
+              <output class="lval" id="o-prep" for="prep">15 min</output>
+            </div>
+            <div class="ruler" data-ruler data-major="10" data-unit="min">
+              <div class="ticks" aria-hidden="true"></div>
+              <div class="tick-labs" aria-hidden="true"></div>
+              <div class="needle" aria-hidden="true"></div>
+              <input type="range" id="prep" name="prep" min="5" max="45" step="1" value="15">
+            </div>
+          </div>
+
+          <div class="line">
+            <div class="line-head">
+              <span class="ln">03</span>
+              <label class="lname" for="experience">Courier hand</label>
+              <i class="leader"></i>
+              <output class="lval" id="o-experience" for="experience">3 yrs</output>
+            </div>
+            <div class="ruler" data-ruler data-major="5" data-unit="yrs">
+              <div class="ticks" aria-hidden="true"></div>
+              <div class="tick-labs" aria-hidden="true"></div>
+              <div class="needle" aria-hidden="true"></div>
+              <input type="range" id="experience" name="experience" min="0" max="15" step="1" value="3">
+            </div>
+          </div>
+
+          <!-- 04–07: stamp selectors (real radios under the marks) -->
+          {% set icons = {'Bike':'bike','Scooter':'scooter','Car':'car',
+                          'Clear':'clear','Foggy':'fog','Rainy':'rain','Windy':'wind','Snowy':'snow',
+                          'Morning':'morning','Afternoon':'noon','Evening':'dusk','Night':'night',
+                          'Low':'sig-low','Medium':'sig-med','High':'sig-high'} %}
+          {% set labels = {'vehicle':'Vehicle','traffic':'Traffic','weather':'Weather','time_of_day':'Time of day'} %}
+          {% set nums = {'vehicle':'04','traffic':'05','weather':'06','time_of_day':'07'} %}
+          {% set defaults = {'vehicle':'Scooter','traffic':'Medium','weather':'Clear','time_of_day':'Evening'} %}
+
+          {% for key in ['vehicle','traffic','weather','time_of_day'] %}
+          <fieldset class="line stamps">
+            <legend>
+              <span class="line-head">
+                <span class="ln">{{ nums[key] }}</span>
+                <span class="lname">{{ labels[key] }}</span>
+                <i class="leader"></i>
+                <span class="lval hint">stamp it</span>
+              </span>
+            </legend>
+            <div class="stamp-row">
+              {% for opt in choices[key] %}
+              <label class="stamp-opt">
+                <input type="radio" name="{{ key }}" value="{{ opt }}"
+                       {% if defaults[key] == opt %}checked{% endif %}>
+                <svg class="ico" aria-hidden="true"><use href="#i-{{ icons[opt] }}"></use></svg>
+                <span class="stamp-name">
+                  <span class="plain">{{ opt }}</span>
+                  <span class="mark" aria-hidden="true">{{ opt }}</span>
+                </span>
+              </label>
+              {% endfor %}
+            </div>
+          </fieldset>
+          {% endfor %}
+        </div>
+
+        <div class="tear-line" aria-hidden="true"></div>
+        <div class="t-total">
+          <div class="tot-row"><span>Total</span><i></i><b id="t-total">— min</b></div>
+          <div class="tot-row"><span>Lands</span><i></i><b id="t-lands">—:—</b></div>
+          <button type="submit" class="fire" id="fire">Fire the order</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="recent">
+      <p class="rh">Recent tickets <span class="rh-note">tap one to fire it again</span></p>
+      <div class="stubs" id="stubs">
+        <p class="stubs-empty">Nothing on the pass yet. Fire an order and the stub lands here.</p>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- ================================================================
+     UNDER THE HOOD — model comparison drawer
+================================================================= -->
+<div class="hood-scrim" id="hood-scrim" hidden></div>
+<aside class="hood" id="hood" role="dialog" aria-modal="true" aria-labelledby="hood-title" hidden>
+  <header class="hood-head">
+    <div>
+      <p class="hood-kicker">Service notes</p>
+      <h2 id="hood-title">Under the hood</h2>
+    </div>
+    <button type="button" class="hood-x" id="hood-close" aria-label="Close panel">
+      <svg class="ico" aria-hidden="true"><use href="#i-x"></use></svg>
+    </button>
+  </header>
+  <div class="hood-body">
+    <p class="hood-lede">
+      Three models were trained on <b>{{ "{:,}".format(metrics.rows) }} deliveries</b>.
+      Lower error wins; here is how they scored.
+    </p>
+
+    {% set mae_max  = metrics.all.values() | map(attribute='mae')  | max %}
+    {% set rmse_max = metrics.all.values() | map(attribute='rmse') | max %}
+    {% for name, m in metrics.all.items() %}
+    <div class="hood-row{% if name == metrics.best %} is-best{% endif %}">
+      <div class="hood-top">
+        <span class="hood-name">{{ name }}</span>
+        {% if name == metrics.best %}<span class="hood-tab">in service</span>{% endif %}
+      </div>
+
+      <div class="hood-metric">
+        <span class="hm-k">MAE</span>
+        <svg class="hm-bar" viewBox="0 0 100 8" preserveAspectRatio="none" aria-hidden="true">
+          <rect x="0" y="0" width="100" height="8" class="hm-track"/>
+          <g transform="rotate(-0.4 50 4)">
+            <rect x="0" y="0.7" height="6.6" fill="#D9432B"
+                  width="{{ [ (m.mae / mae_max * 100) | round(1), 4 ] | max }}"/>
+          </g>
+        </svg>
+        <b class="hm-v">{{ m.mae }}</b>
+      </div>
+
+      <div class="hood-metric">
+        <span class="hm-k">RMSE</span>
+        <svg class="hm-bar" viewBox="0 0 100 8" preserveAspectRatio="none" aria-hidden="true">
+          <rect x="0" y="0" width="100" height="8" class="hm-track"/>
+          <g transform="rotate(-0.35 50 4)">
+            <rect x="0" y="0.7" height="6.6" fill="#E8B23A"
+                  width="{{ [ (m.rmse / rmse_max * 100) | round(1), 4 ] | max }}"/>
+          </g>
+        </svg>
+        <b class="hm-v">{{ m.rmse }}</b>
+      </div>
+
+      <div class="hood-metric">
+        <span class="hm-k">R²</span>
+        <svg class="hm-bar" viewBox="0 0 100 8" preserveAspectRatio="none" aria-hidden="true">
+          <rect x="0" y="0" width="100" height="8" class="hm-track"/>
+          <g transform="rotate(-0.45 50 4)">
+            <rect x="0" y="0.7" height="6.6" fill="#3F6B4E"
+                  width="{{ [ ((m.r2 - 0.85) / 0.15 * 100) | round(1), 4 ] | max }}"/>
+          </g>
+        </svg>
+        <b class="hm-v">{{ m.r2 }}</b>
+      </div>
+    </div>
+    {% endfor %}
+
+    <p class="hood-plain">
+      <b>In plain words:</b> the model in service is typically off by
+      <b>{{ metrics.mae }} minutes</b> — about the time it takes to plate the sides.
+      It explains <b>{{ (metrics.r2 * 100) | round(1) }}%</b> of the variation in real delivery times,
+      and it is the model behind every number on the board.
+    </p>
+    <p class="hood-plain small">
+      Bars: MAE and RMSE are errors in minutes, so shorter is better. R² runs 0 to 1, so longer is better.
+    </p>
+  </div>
+</aside>
+
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+<script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>

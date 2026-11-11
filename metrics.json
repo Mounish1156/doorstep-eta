@@ -1,0 +1,24 @@
+{
+  "best": "Gradient Boosting",
+  "mae": 2.65,
+  "rmse": 3.28,
+  "r2": 0.981,
+  "rows": 6000,
+  "all": {
+    "Linear Regression": {
+      "mae": 4.73,
+      "rmse": 6.21,
+      "r2": 0.93
+    },
+    "Random Forest": {
+      "mae": 3.38,
+      "rmse": 4.34,
+      "r2": 0.966
+    },
+    "Gradient Boosting": {
+      "mae": 2.65,
+      "rmse": 3.28,
+      "r2": 0.981
+    }
+  }
+}
